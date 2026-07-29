@@ -1,0 +1,34 @@
+{
+    "name": "anjan-talukdar/laravel-page-versioning",
+    "description": "A lightweight, append-only content management and versioning engine for Laravel applications with optional Filament Admin support.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Anjan Talukdar"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "illuminate/database": "^10.0|^11.0|^12.0"
+    },
+    "suggest": {
+        "filament/filament": "Required to use the optional Filament Admin Panel plugin (^3.0|^4.0|^5.0)."
+    },
+    "autoload": {
+        "files": [
+            "src/helpers.php"
+        ],
+        "psr-4": {
+            "AnjanTalukdar\\PageVersioning\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "AnjanTalukdar\\PageVersioning\\PageVersioningServiceProvider"
+            ]
+        }
+    }
+}
