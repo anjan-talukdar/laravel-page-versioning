@@ -26,8 +26,19 @@ class PageVersioningServiceProvider extends ServiceProvider
         // Load migrations
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
-        // Load views
-        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'page-versioning');
+        // Published vendor view path for publisher/package namespace
+        $vendorViewPath = resource_path('views/vendor/anjan-talukdar/laravel-page-versioning');
+
+        // Load views under primary package namespace and legacy alias (checking vendor path first)
+        $this->loadViewsFrom([
+            $vendorViewPath,
+            __DIR__ . '/../resources/views',
+        ], 'laravel-page-versioning');
+
+        $this->loadViewsFrom([
+            $vendorViewPath,
+            __DIR__ . '/../resources/views',
+        ], 'page-versioning');
 
         // Load routes if enabled in config
         if (config('page-versioning.register_routes', true)) {
@@ -51,9 +62,9 @@ class PageVersioningServiceProvider extends ServiceProvider
                 __DIR__ . '/../database/migrations' => database_path('migrations'),
             ], 'page-versioning-migrations');
 
-            // Views publishing
+            // Views publishing to vendor/anjan-talukdar/laravel-page-versioning
             $this->publishes([
-                __DIR__ . '/../resources/views' => resource_path('views/vendor/page-versioning'),
+                __DIR__ . '/../resources/views' => $vendorViewPath,
             ], 'page-versioning-views');
 
             // Filament resources publishing for full customization

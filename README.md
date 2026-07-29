@@ -15,6 +15,7 @@ Maintains complete revision history for static pages (e.g. Privacy Policy, Terms
 - **Dual Support**: Fully functional out-of-the-box in standard Laravel applications (without Filament) or inside Filament Admin dashboards via `PageVersioningPlugin`.
 - **Application Status Enum**: Type-safe version status management (`DRAFT`, `PUBLISHED`, `ARCHIVED`).
 - **Flexible URL Routing**: Supports direct short URLs (`/pages/privacy-policy`) and optional type-prepended URLs (`/pages/legal/privacy-policy`).
+- **Automatic Custom Blade Resolution**: Create custom per-slug or per-type views effortlessly.
 - **Blade Helpers**: Retrieve published page instances or contents in Blade using `page('privacy-policy')`.
 - **Centralized Service**: All business logic encapsulated in `PageService`.
 
@@ -91,11 +92,35 @@ Developers can customize the Filament resources in 3 ways:
 
 ---
 
+## Custom Blade Views & Templates
+
+Developers can customize page Blade views in 3 flexible ways:
+
+### 1. Page-Specific / Slug-Specific View Overrides (Automatic Resolution)
+Create a Blade view matching the page slug in your host application's `resources/views/pages/`:
+- `resources/views/pages/about-us.blade.php`
+- `resources/views/pages/privacy-policy.blade.php`
+
+The package automatically detects and renders these custom files whenever that page slug is accessed!
+
+### 2. Category / Type-Specific View Overrides
+Create a Blade view matching the page category type:
+- `resources/views/pages/legal.blade.php`
+- `resources/views/pages/general.blade.php`
+
+### 3. Publish Global Package View for Overwriting
+Publish the default Blade template to `resources/views/vendor/anjan-talukdar/laravel-page-versioning/show.blade.php`:
+```bash
+php artisan vendor:publish --tag=page-versioning-views
+```
+
+---
+
 ## Usage Guide
 
 ### Using Blade Helper (Without Filament)
 
-You can retrieve active published pages directly in any Blade view:
+You can retrieve active published pages directly in any custom Blade view:
 
 ```blade
 @if($policy = page('privacy-policy'))
@@ -149,7 +174,7 @@ return [
     'register_routes' => true,
     'route_prefix' => 'pages',
     'route_middleware' => ['web'],
-    'layout' => 'layouts.app',
+    'layout' => 'public.layouts.app',
     'default_types' => [
         'legal' => 'Legal & Policies',
         'general' => 'General Information',
