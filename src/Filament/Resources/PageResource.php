@@ -3,26 +3,25 @@
 namespace AnjanTalukdar\PageVersioning\Filament\Resources;
 
 use AnjanTalukdar\PageVersioning\Filament\PageVersioningPlugin;
+use AnjanTalukdar\PageVersioning\Filament\Resources\PageResource\Pages\CreatePageResource;
+use AnjanTalukdar\PageVersioning\Filament\Resources\PageResource\Pages\EditPageResource;
+use AnjanTalukdar\PageVersioning\Filament\Resources\PageResource\Pages\ListPageResource;
 use AnjanTalukdar\PageVersioning\Filament\Resources\PageResource\RelationManagers\PageVersionsRelationManager;
 use AnjanTalukdar\PageVersioning\Models\Page;
-use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteAction;
-use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
-use Filament\Actions\ViewAction;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\RichEditor;
-use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
@@ -40,46 +39,34 @@ class PageResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        if (class_exists(Filament::class) && Filament::getCurrentPanel()) {
-            try {
-                $plugin = Filament::getCurrentPanel()->getPlugin('laravel-page-versioning');
-                if ($plugin instanceof PageVersioningPlugin) {
-                    return $plugin->getNavigationGroup();
-                }
-            } catch (\Throwable $e) {
-                // Fallback to config
-            }
+        if (class_exists(PageVersioningPlugin::class) && filament()->hasPlugin('laravel-page-versioning')) {
+            /** @var PageVersioningPlugin $plugin */
+            $plugin = filament('laravel-page-versioning');
+            return $plugin->getNavigationGroup();
         }
+
         return config('page-versioning.filament.navigation_group', 'Content Management');
     }
 
     public static function getNavigationIcon(): ?string
     {
-        if (class_exists(Filament::class) && Filament::getCurrentPanel()) {
-            try {
-                $plugin = Filament::getCurrentPanel()->getPlugin('laravel-page-versioning');
-                if ($plugin instanceof PageVersioningPlugin) {
-                    return $plugin->getNavigationIcon();
-                }
-            } catch (\Throwable $e) {
-                // Fallback to config
-            }
+        if (class_exists(PageVersioningPlugin::class) && filament()->hasPlugin('laravel-page-versioning')) {
+            /** @var PageVersioningPlugin $plugin */
+            $plugin = filament('laravel-page-versioning');
+            return $plugin->getNavigationIcon();
         }
+
         return config('page-versioning.filament.navigation_icon', 'heroicon-o-document-duplicate');
     }
 
     public static function getNavigationSort(): ?int
     {
-        if (class_exists(Filament::class) && Filament::getCurrentPanel()) {
-            try {
-                $plugin = Filament::getCurrentPanel()->getPlugin('laravel-page-versioning');
-                if ($plugin instanceof PageVersioningPlugin) {
-                    return $plugin->getNavigationSort();
-                }
-            } catch (\Throwable $e) {
-                // Fallback to config
-            }
+        if (class_exists(PageVersioningPlugin::class) && filament()->hasPlugin('laravel-page-versioning')) {
+            /** @var PageVersioningPlugin $plugin */
+            $plugin = filament('laravel-page-versioning');
+            return $plugin->getNavigationSort();
         }
+
         return config('page-versioning.filament.navigation_sort', 10);
     }
 
@@ -92,18 +79,20 @@ class PageResource extends Resource
 
         return $schema
             ->components([
-                Section::make('Page Settings')
-                    ->description('Basic configuration and URL slug for this static page.')
+                Section::make('Page Identity')
+                    ->description('Set category type and unique URL slug for this page.')
                     ->schema([
                         Select::make('type')
+                            ->label('Page Category / Type')
                             ->options($types)
                             ->default('general')
-                            ->required(),
-                        TextInput::make('slug')
                             ->required()
-                            ->maxLength(255)
+                            ->searchable(),
+                        TextInput::make('slug')
+                            ->label('URL Slug')
+                            ->placeholder('e.g., privacy-policy')
+                            ->required()
                             ->unique(ignoreRecord: true)
-                            ->helperText('Unique URL identifier (e.g., privacy-policy, terms-of-service).')
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn($set, ?string $state) => $set('slug', Str::slug($state))),
                     ])->columns(2)
@@ -125,14 +114,10 @@ class PageResource extends Resource
                             }),
                         TextInput::make('initial_version_name')
                             ->label('Version Name')
-                            ->default('Initial Release')
-                            ->placeholder('e.g., Initial Release')
-                            ->required(fn(?Page $record) => $record === null),
-                        TextInput::make('initial_version_code')
-                            ->label('Version Code')
                             ->default('v1.0.0')
-                            ->placeholder('e.g., v1.0.0')
-                            ->required(fn(?Page $record) => $record === null),
+                            ->placeholder('e.g., v1.0.0 or Initial Release')
+                            ->required(fn(?Page $record) => $record === null)
+                            ->columnSpan(2),
                         RichEditor::make('initial_content')
                             ->label('Page Content')
                             ->required(fn(?Page $record) => $record === null)
@@ -180,10 +165,11 @@ class PageResource extends Resource
                     ->default('-')
                     ->sortable(),
                 TextColumn::make('currentVersion.version_code')
-                    ->label('Version Code')
+                    ->label('Revision #')
                     ->badge()
                     ->color('success')
-                    ->default('N/A'),
+                    ->formatStateUsing(fn($state) => $state ? "#{$state}" : 'N/A')
+                    ->sortable(),
                 TextColumn::make('currentVersion.published_at')
                     ->label('Published Date')
                     ->dateTime('M d, Y H:i')
@@ -198,18 +184,15 @@ class PageResource extends Resource
                     ->options($types),
                 TrashedFilter::make(),
             ])
-            ->recordActions([
-                ViewAction::make(),
+            ->actions([
                 EditAction::make(),
                 DeleteAction::make(),
                 RestoreAction::make(),
-                ForceDeleteAction::make(),
             ])
-            ->toolbarActions([
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     RestoreBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -224,9 +207,9 @@ class PageResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => PageResource\Pages\ListPageResource::route('/'),
-            'create' => PageResource\Pages\CreatePageResource::route('/create'),
-            'edit' => PageResource\Pages\EditPageResource::route('/{record}/edit'),
+            'index' => ListPageResource::route('/'),
+            'create' => CreatePageResource::route('/create'),
+            'edit' => EditPageResource::route('/{record}/edit'),
         ];
     }
 

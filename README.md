@@ -12,6 +12,8 @@ Maintains complete revision history for static pages (e.g. Privacy Policy, Terms
 ## Key Features
 
 - **Append-Only History**: Edits and rollbacks duplicate revisions as brand-new versions without ever overwriting historical records.
+- **Auto-Increment Revision Code**: `version_code` is an integer (`1`, `2`, `3`...) automatically calculated by the system without requiring user input.
+- **Viewer-Facing Version Name**: `version_name` stores human-friendly version strings (e.g. `v1.0.0`, `v1.1.0`, `Initial Release`).
 - **Dual Support**: Fully functional out-of-the-box in standard Laravel applications (without Filament) or inside Filament Admin dashboards via `PageVersioningPlugin`.
 - **Application Status Enum**: Type-safe version status management (`DRAFT`, `PUBLISHED`, `ARCHIVED`).
 - **Flexible URL Routing**: Supports direct short URLs (`/pages/privacy-policy`) and optional type-prepended URLs (`/pages/legal/privacy-policy`).
@@ -126,7 +128,7 @@ You can retrieve active published pages directly in any custom Blade view:
 @if($policy = page('privacy-policy'))
     <h1>{{ $policy->currentVersion->title }}</h1>
     <div>{!! $policy->currentVersion->content !!}</div>
-    <small>Version: {{ $policy->currentVersion->version_name }} ({{ $policy->currentVersion->version_code }})</small>
+    <small>Version: {{ $policy->currentVersion->version_name }} (Rev #{{ $policy->currentVersion->version_code }})</small>
 @endif
 ```
 
@@ -138,22 +140,20 @@ use AnjanTalukdar\PageVersioning\Enums\PageVersionStatus;
 
 $service = app(PageService::class);
 
-// 1. Create a logical page with initial version
+// 1. Create a logical page with initial version (version_code auto-set to 1)
 $page = $service->createPage([
     'type' => 'legal',
     'slug' => 'privacy-policy',
 ], [
     'title' => 'Privacy Policy',
-    'version_name' => 'Initial Release',
-    'version_code' => 'v1.0.0',
+    'version_name' => 'v1.0.0', // Viewer version label
     'content' => '<p>Privacy policy content...</p>',
 ], $userId = null, $publishImmediately = true);
 
-// 2. Draft a new revision
+// 2. Draft a new revision (version_code auto-incremented to 2)
 $draftVersion = $service->createVersion($page, [
     'title' => 'Privacy Policy (2027 Update)',
-    'version_name' => 'DPDP Compliance Update',
-    'version_code' => 'v1.1.0',
+    'version_name' => 'v1.1.0',
     'content' => '<p>Updated privacy policy content...</p>',
     'change_summary' => 'Updated data protection compliance terms',
 ], PageVersionStatus::DRAFT);
@@ -161,7 +161,7 @@ $draftVersion = $service->createVersion($page, [
 // 3. Publish a revision
 $service->publishVersion($page, $draftVersion);
 
-// 4. Safe Rollback to a past version
+// 4. Safe Rollback to a past version (version_code auto-incremented to 3)
 $service->rollbackToVersion($page, $oldVersion, 'Rollback to Initial Release');
 ```
 

@@ -84,7 +84,7 @@ class Page extends Model
         return $this->currentVersion?->version_name;
     }
 
-    public function getCurrentVersionCode(): ?string
+    public function getCurrentVersionCode(): ?int
     {
         return $this->currentVersion?->version_code;
     }

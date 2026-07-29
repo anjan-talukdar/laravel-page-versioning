@@ -25,6 +25,7 @@ class PageVersion extends Model
     ];
 
     protected $casts = [
+        'version_code' => 'integer',
         'status' => PageVersionStatus::class,
         'published_at' => 'datetime',
     ];
@@ -81,15 +82,15 @@ class PageVersion extends Model
         return $this->status === PageVersionStatus::ARCHIVED;
     }
 
-    public function duplicateAsNewVersion(string $newVersionCode, ?string $newVersionName = null, ?int $userId = null): self
+    public function duplicateAsNewVersion(int $newVersionCode, ?string $newVersionName = null, ?int $userId = null): self
     {
         return self::create([
             'page_id' => $this->page_id,
-            'version_name' => $newVersionName ?? ("Rollback to " . ($this->version_name ?: $this->version_code)),
+            'version_name' => $newVersionName ?? ("Rollback to " . ($this->version_name ?: "Rev #" . $this->version_code)),
             'version_code' => $newVersionCode,
             'title' => $this->title,
             'content' => $this->content,
-            'change_summary' => "Restored from version {$this->version_code}",
+            'change_summary' => "Restored from version revision #{$this->version_code} ({$this->version_name})",
             'status' => PageVersionStatus::DRAFT,
             'published_at' => null,
             'created_by' => $userId,

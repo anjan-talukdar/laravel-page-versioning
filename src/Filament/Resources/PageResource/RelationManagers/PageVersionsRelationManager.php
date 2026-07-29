@@ -29,7 +29,7 @@ class PageVersionsRelationManager extends RelationManager
 
     protected static ?string $title = 'Version History & Revisions';
 
-    protected static ?string $recordTitleAttribute = 'version_code';
+    protected static ?string $recordTitleAttribute = 'version_name';
 
     public function form(Schema $schema): Schema
     {
@@ -37,7 +37,7 @@ class PageVersionsRelationManager extends RelationManager
         $page = $this->getOwnerRecord();
         /** @var PageService $pageService */
         $pageService = app(PageService::class);
-        $nextVersionCode = $page ? $pageService->generateNextVersionCode($page) : 'v1.0.0';
+        $nextVersionCode = $page ? $pageService->generateNextVersionCode($page) : 1;
 
         return $schema
             ->components([
@@ -47,11 +47,8 @@ class PageVersionsRelationManager extends RelationManager
                     ->required(),
                 TextInput::make('version_name')
                     ->label('Version Name')
-                    ->placeholder('e.g., DPDP Compliance Update')
-                    ->required(),
-                TextInput::make('version_code')
-                    ->label('Version Code')
-                    ->default($nextVersionCode)
+                    ->default("v{$nextVersionCode}.0.0")
+                    ->placeholder('e.g., v1.0.0 or DPDP Compliance Update')
                     ->required(),
                 Select::make('status')
                     ->options([
@@ -78,11 +75,11 @@ class PageVersionsRelationManager extends RelationManager
         return $table
             ->columns([
                 TextColumn::make('version_code')
-                    ->label('Version Code')
+                    ->label('Revision #')
                     ->badge()
                     ->color(fn(PageVersion $record) => $record->isCurrent() ? 'success' : 'gray')
-                    ->sortable()
-                    ->searchable(),
+                    ->formatStateUsing(fn($state) => "#{$state}")
+                    ->sortable(),
                 TextColumn::make('version_name')
                     ->label('Version Name')
                     ->sortable()
@@ -121,7 +118,7 @@ class PageVersionsRelationManager extends RelationManager
                         $pageService = app(PageService::class);
 
                         $status = PageVersionStatus::from($data['status']);
-                        return $pageService->createVersion($page, $data, $status, Auth::id());
+                        return $pageService->createVersion($page, $data, Auth::id(), $status);
                     }),
             ])
             ->recordActions([
@@ -150,7 +147,7 @@ class PageVersionsRelationManager extends RelationManager
 
                         Notification::make()
                             ->title('Version Published')
-                            ->body("Version {$record->version_code} is now active and published.")
+                            ->body("Version revision #{$record->version_code} ({$record->version_name}) is now active.")
                             ->success()
                             ->send();
                     }),
@@ -163,7 +160,7 @@ class PageVersionsRelationManager extends RelationManager
                     ->schema([
                         TextInput::make('custom_version_name')
                             ->label('New Version Name for Rollback')
-                            ->default(fn(PageVersion $record) => "Rollback to " . ($record->version_name ?: $record->version_code))
+                            ->default(fn(PageVersion $record) => "Rollback to " . ($record->version_name ?: "Rev #" . $record->version_code))
                             ->required(),
                     ])
                     ->requiresConfirmation()
@@ -184,7 +181,7 @@ class PageVersionsRelationManager extends RelationManager
 
                         Notification::make()
                             ->title('Rollback Complete')
-                            ->body("Created and published version {$newVersion->version_code} based on revision {$record->version_code}.")
+                            ->body("Created revision #{$newVersion->version_code} based on revision #{$record->version_code}.")
                             ->success()
                             ->send();
                     }),

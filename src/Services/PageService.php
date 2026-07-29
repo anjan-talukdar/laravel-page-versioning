@@ -6,66 +6,78 @@ use AnjanTalukdar\PageVersioning\Enums\PageVersionStatus;
 use AnjanTalukdar\PageVersioning\Models\Page;
 use AnjanTalukdar\PageVersioning\Models\PageVersion;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class PageService
 {
-    public function getPageModel(): Page
+    /**
+     * Get configured Page class model
+     */
+    protected function pageModel(): string
     {
-        $class = config('page-versioning.models.page', Page::class);
-        return new $class();
+        return config('page-versioning.models.page', Page::class);
     }
 
-    public function getPageVersionModel(): PageVersion
+    /**
+     * Get configured PageVersion class model
+     */
+    protected function versionModel(): string
     {
-        $class = config('page-versioning.models.page_version', PageVersion::class);
-        return new $class();
+        return config('page-versioning.models.page_version', PageVersion::class);
     }
 
+    /**
+     * Generate the next auto-incrementing integer version code for a page.
+     */
+    public function generateNextVersionCode(Page $page): int
+    {
+        $maxCode = $page->versions()->max('version_code');
+        return ($maxCode ?? 0) + 1;
+    }
+
+    /**
+     * Create a new page along with its initial version.
+     */
     public function createPage(array $pageData, array $versionData, ?int $userId = null, bool $publishImmediately = true): Page
     {
         return DB::transaction(function () use ($pageData, $versionData, $userId, $publishImmediately) {
-            $page = $this->getPageModel()->create([
+            $pageClass = $this->pageModel();
+
+            /** @var Page $page */
+            $page = $pageClass::create([
                 'type' => $pageData['type'] ?? 'general',
                 'slug' => $pageData['slug'],
             ]);
 
-            $versionCode = $versionData['version_code'] ?? $this->generateNextVersionCode($page);
-            $versionName = $versionData['version_name'] ?? 'Initial Release';
+            $versionCode = 1;
+            $versionName = $versionData['version_name'] ?? 'v1.0.0';
 
-            $version = $page->versions()->create([
-                'version_name' => $versionName,
+            $version = $this->createVersionInternal($page, array_merge($versionData, [
                 'version_code' => $versionCode,
-                'title' => $versionData['title'],
-                'content' => $versionData['content'],
-                'change_summary' => $versionData['change_summary'] ?? 'Initial publication',
-                'status' => $publishImmediately ? PageVersionStatus::PUBLISHED : PageVersionStatus::DRAFT,
-                'published_at' => $publishImmediately ? now() : null,
-                'created_by' => $userId,
-            ]);
+                'version_name' => $versionName,
+            ]), $userId, $publishImmediately ? PageVersionStatus::PUBLISHED : PageVersionStatus::DRAFT);
 
             if ($publishImmediately) {
                 $page->update(['current_version_id' => $version->id]);
             }
 
-            return $page->fresh(['currentVersion']);
+            return $page->fresh(['currentVersion', 'versions']);
         });
     }
 
-    public function createVersion(Page $page, array $versionData, PageVersionStatus $status = PageVersionStatus::DRAFT, ?int $userId = null): PageVersion
+    /**
+     * Create a new version revision for an existing page.
+     */
+    public function createVersion(Page $page, array $versionData, ?int $userId = null, PageVersionStatus $status = PageVersionStatus::DRAFT): PageVersion
     {
-        return DB::transaction(function () use ($page, $versionData, $status, $userId) {
-            $versionCode = $versionData['version_code'] ?? $this->generateNextVersionCode($page);
+        return DB::transaction(function () use ($page, $versionData, $userId, $status) {
+            $nextCode = $this->generateNextVersionCode($page);
+            $versionName = $versionData['version_name'] ?? ("v" . $nextCode . ".0.0");
 
-            $version = $page->versions()->create([
-                'version_name' => $versionData['version_name'] ?? "Revision {$versionCode}",
-                'version_code' => $versionCode,
-                'title' => $versionData['title'] ?? ($page->currentVersion?->title ?? $page->slug),
-                'content' => $versionData['content'],
-                'change_summary' => $versionData['change_summary'] ?? null,
-                'status' => $status,
-                'published_at' => $status === PageVersionStatus::PUBLISHED ? now() : null,
-                'created_by' => $userId,
-            ]);
+            $version = $this->createVersionInternal($page, array_merge($versionData, [
+                'version_code' => $nextCode,
+                'version_name' => $versionName,
+            ]), $userId, $status);
 
             if ($status === PageVersionStatus::PUBLISHED) {
                 $this->publishVersion($page, $version);
@@ -75,73 +87,106 @@ class PageService
         });
     }
 
-    public function publishVersion(Page $page, PageVersion $version): Page
+    /**
+     * Internal helper to persist a version.
+     */
+    protected function createVersionInternal(Page $page, array $data, ?int $userId, PageVersionStatus $status): PageVersion
     {
+        $versionClass = $this->versionModel();
+
+        return $versionClass::create([
+            'page_id' => $page->id,
+            'version_name' => $data['version_name'],
+            'version_code' => $data['version_code'],
+            'title' => $data['title'],
+            'content' => $data['content'],
+            'change_summary' => $data['change_summary'] ?? null,
+            'status' => $status,
+            'published_at' => $status === PageVersionStatus::PUBLISHED ? now() : null,
+            'created_by' => $userId,
+        ]);
+    }
+
+    /**
+     * Publish a draft or existing version, marking previous published versions as ARCHIVED.
+     */
+    public function publishVersion(Page $page, PageVersion $version): bool
+    {
+        if ((int) $version->page_id !== (int) $page->id) {
+            throw new InvalidArgumentException("Version ID {$version->id} does not belong to Page ID {$page->id}.");
+        }
+
         return DB::transaction(function () use ($page, $version) {
-            // Set all currently published versions for this page to ARCHIVED
+            // Archive previous published versions
             $page->versions()
                 ->where('status', PageVersionStatus::PUBLISHED)
                 ->where('id', '!=', $version->id)
                 ->update(['status' => PageVersionStatus::ARCHIVED]);
 
-            // Mark this target version as PUBLISHED
+            // Update target version to PUBLISHED
             $version->update([
                 'status' => PageVersionStatus::PUBLISHED,
                 'published_at' => $version->published_at ?? now(),
             ]);
 
-            // Update page's current_version_id
+            // Set current version pointer on page
             $page->update(['current_version_id' => $version->id]);
 
-            return $page->fresh(['currentVersion']);
+            return true;
         });
     }
 
-    public function rollbackToVersion(Page $page, PageVersion $targetVersion, ?string $customVersionName = null, ?int $userId = null): PageVersion
+    /**
+     * Append-Only Rollback: Duplicates a past version as a NEW auto-incremented revision.
+     */
+    public function rollbackToVersion(Page $page, PageVersion $targetVersion, ?string $reason = null, ?int $userId = null, bool $publishImmediately = true): PageVersion
     {
-        return DB::transaction(function () use ($page, $targetVersion, $customVersionName, $userId) {
-            $nextVersionCode = $this->generateNextVersionCode($page);
-            $versionName = $customVersionName ?? ("Rollback to " . ($targetVersion->version_name ?: $targetVersion->version_code));
+        if ((int) $targetVersion->page_id !== (int) $page->id) {
+            throw new InvalidArgumentException("Target version does not belong to this page.");
+        }
 
-            $newVersion = $targetVersion->duplicateAsNewVersion($nextVersionCode, $versionName, $userId);
+        return DB::transaction(function () use ($page, $targetVersion, $reason, $userId, $publishImmediately) {
+            $nextCode = $this->generateNextVersionCode($page);
+            $newVersionName = "Rollback to " . ($targetVersion->version_name ?: "Rev #" . $targetVersion->version_code);
 
-            $this->publishVersion($page, $newVersion);
+            $newVersion = $targetVersion->duplicateAsNewVersion($nextCode, $newVersionName, $userId);
+
+            if ($reason) {
+                $newVersion->update([
+                    'change_summary' => "Rollback to version revision #{$targetVersion->version_code} ({$targetVersion->version_name}): {$reason}",
+                ]);
+            }
+
+            if ($publishImmediately) {
+                $this->publishVersion($page, $newVersion);
+            }
 
             return $newVersion;
         });
     }
 
+    /**
+     * Retrieve a published page by slug (and optional type).
+     */
     public function getPageBySlug(string $slug, ?string $type = null): ?Page
     {
-        $query = $this->getPageModel()
-            ->with(['currentVersion'])
-            ->where('slug', $slug);
+        $pageClass = $this->pageModel();
+
+        $query = $pageClass::query()
+            ->where('slug', $slug)
+            ->with(['currentVersion' => fn ($q) => $q->where('status', PageVersionStatus::PUBLISHED)]);
 
         if ($type !== null) {
             $query->where('type', $type);
         }
 
+        /** @var Page|null $page */
         $page = $query->first();
 
-        if ($page && $page->isPublished()) {
-            return $page;
+        if (!$page || !$page->currentVersion) {
+            return null;
         }
 
-        return null;
-    }
-
-    public function generateNextVersionCode(Page $page): string
-    {
-        $latestVersion = $page->versions()->orderBy('id', 'desc')->first();
-
-        if (!$latestVersion || !preg_match('/^v?(\d+)\.(\d+)\.(\d+)$/i', $latestVersion->version_code, $matches)) {
-            return 'v1.0.0';
-        }
-
-        $major = (int) $matches[1];
-        $minor = (int) $matches[2] + 1;
-        $patch = 0;
-
-        return "v{$major}.{$minor}.{$patch}";
+        return $page;
     }
 }
