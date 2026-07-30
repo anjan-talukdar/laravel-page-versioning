@@ -8,6 +8,7 @@ use AnjanTalukdar\PageVersioning\Filament\Resources\PageResource\Pages\EditPageR
 use AnjanTalukdar\PageVersioning\Filament\Resources\PageResource\Pages\ListPageResource;
 use AnjanTalukdar\PageVersioning\Filament\Resources\PageResource\RelationManagers\PageVersionsRelationManager;
 use AnjanTalukdar\PageVersioning\Models\Page;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -22,6 +23,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Actions\BulkActionGroup;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
@@ -121,7 +123,7 @@ class PageResource extends Resource
                         RichEditor::make('initial_content')
                             ->label('Page Content')
                             ->required(fn(?Page $record) => $record === null)
-                            ->extraAttributes(['style' => 'min-height: 400px;'])
+                            ->extraInputAttributes(['style' => 'max-height: 500px; min-height: 300px; overflow-y: auto;'])
                             ->columnSpanFull(),
                         Textarea::make('initial_change_summary')
                             ->label('Change Summary')
@@ -185,6 +187,12 @@ class PageResource extends Resource
                 TrashedFilter::make(),
             ])
             ->actions([
+                Action::make('visit')
+                    ->label('View Page')
+                    ->icon(Heroicon::ArrowTopRightOnSquare)
+                    ->color('info')
+                    ->url(fn(Page $record): string => route('page-versioning.show', $record->slug))
+                    ->openUrlInNewTab(),
                 EditAction::make(),
                 DeleteAction::make(),
                 RestoreAction::make(),

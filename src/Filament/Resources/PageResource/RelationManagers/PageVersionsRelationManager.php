@@ -61,6 +61,7 @@ class PageVersionsRelationManager extends RelationManager
                     ->label('Page Content')
                     ->default(fn() => $page?->currentVersion?->content)
                     ->required()
+                    ->extraInputAttributes(['style' => 'max-height: 500px; min-height: 300px; overflow-y: auto;'])
                     ->columnSpanFull(),
                 Textarea::make('change_summary')
                     ->label('Change Summary')
@@ -128,7 +129,7 @@ class PageVersionsRelationManager extends RelationManager
                         TextInput::make('version_code')->disabled(),
                         TextInput::make('title')->disabled(),
                         Textarea::make('change_summary')->disabled(),
-                        RichEditor::make('content')->disabled()->columnSpanFull(),
+                        RichEditor::make('content')->disabled()->extraInputAttributes(['style' => 'max-height: 500px; min-height: 200px; overflow-y: auto;'])->columnSpanFull(),
                     ]),
 
                 Action::make('publish')
