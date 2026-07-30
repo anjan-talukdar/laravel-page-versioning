@@ -40,9 +40,11 @@ class PageVersioningServiceProvider extends ServiceProvider
             __DIR__ . '/../resources/views',
         ], 'page-versioning');
 
-        // Load routes if enabled in config
+        // Load routes if enabled in config (deferred to app->booted so host app routes load first)
         if (config('page-versioning.register_routes', true)) {
-            $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+            $this->app->booted(function () {
+                $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+            });
         }
 
         // Console commands and publishables
