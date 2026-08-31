@@ -61,7 +61,7 @@ class PageVersionsRelationManager extends RelationManager
                     ->label('Page Content')
                     ->default(fn() => $page?->currentVersion?->content)
                     ->required()
-                    ->extraInputAttributes(['style' => 'max-height: 500px; min-height: 300px; overflow-y: auto;'])
+                    ->extraInputAttributes(['style' => 'min-height: 400px; max-height: 400px; overflow-y: auto;'])
                     ->columnSpanFull(),
                 Textarea::make('change_summary')
                     ->label('Change Summary')

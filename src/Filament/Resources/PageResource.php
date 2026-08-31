@@ -123,7 +123,7 @@ class PageResource extends Resource
                         RichEditor::make('initial_content')
                             ->label('Page Content')
                             ->required(fn(?Page $record) => $record === null)
-                            ->extraInputAttributes(['style' => 'max-height: 500px; min-height: 300px; overflow-y: auto;'])
+                            ->extraInputAttributes(['style' => 'min-height: 400px; max-height: 400px; overflow-y: auto;'])
                             ->columnSpanFull(),
                         Textarea::make('initial_change_summary')
                             ->label('Change Summary')
